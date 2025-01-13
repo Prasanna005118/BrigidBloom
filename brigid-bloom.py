@@ -60,10 +60,13 @@ def initialize_database():
         st.error(f"Error initializing database: {str(e)}")
         st.stop()
 
+    return dataset
 
 def add_chunk_to_database(chunk):
     embedding = ollama.embed(model=EMBEDDING_MODEL, input=chunk)['embeddings'][0]
     VECTOR_DB.append((chunk, embedding))
+
+dataset = initialize_database()
 
 for chunk in dataset:
     add_chunk_to_database(chunk)
