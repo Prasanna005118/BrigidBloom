@@ -159,21 +159,23 @@ if submit_button and user_input:
                             stream=True,
                         )
 
+                        # Streaming the bot response as it is being processed
                         for chunk in stream:
                             bot_response += chunk['message']['content']
                             message_placeholder.markdown(f"**Bot**: {bot_response}")
+
+                        # Save response and set context after the stream finishes
+                        st.session_state.history.append({
+                            'user_input': user_input,
+                            'bot_response': bot_response
+                        })
+                        st.session_state.context = user_input  # Update context
+
                     except Exception as e:
                         st.error(f"Error getting response from Ollama: {str(e)}")
                         bot_response = "I apologize, but I'm having trouble processing your request right now. Please try again in a moment."
 
-                # Save response and set context
-                st.session_state.history.append({
-                    'user_input': user_input,
-                    'bot_response': bot_response
-                })
-                st.session_state.context = user_input  # Update context
-
-# Display the conversation history
+# Display the conversation history (only once after processing the user input)
 for entry in reversed(st.session_state.history):
     with st.chat_message("assistant"):
         st.markdown(f"**Bot**: {entry['bot_response']}")
