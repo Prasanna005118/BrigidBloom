@@ -3,28 +3,63 @@ import ollama
 from nltk.stem import PorterStemmer
 import re
 from config import OLLAMA_HOST, EMBEDDING_MODEL, LANGUAGE_MODEL
+import time
 
 # Configure Ollama host
 ollama.host = OLLAMA_HOST
 
-# Load the dataset
-dataset = []
-with open('context.txt', 'r', encoding='utf-8') as file:
-    dataset = file.readlines()
-
-# Initialize vector database
+# Initialize vector database and stemmer
 VECTOR_DB = []
-
-# Initialize PorterStemmer for singular/plural handling
 stemmer = PorterStemmer()
 
-def check_ollama_connection():
+def check_ollama_connection(max_retries=3, delay=2):
+    """Check connection to Ollama server with retries"""
+    for attempt in range(max_retries):
+        try:
+            ollama.embed(model=EMBEDDING_MODEL, input="test")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                st.warning(f"Attempt {attempt + 1}/{max_retries}: Cannot connect to Ollama server. Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                st.error(f"""
+                Cannot connect to Ollama server at {OLLAMA_HOST}. 
+                Please ensure:
+                1. Ollama server is running
+                2. OLLAMA_HOST in config.py is correct
+                3. Your firewall allows connections to the Ollama server
+                4. The server is accessible from your Streamlit deployment
+                
+                Error: {str(e)}
+                """)
+                return False
+
+def initialize_database():
+    """Initialize the vector database with retry mechanism"""
+    if not check_ollama_connection():
+        st.stop()
+        return
+    
     try:
-        ollama.embed(model=EMBEDDING_MODEL, input="test")
-        return True
+        # Load the dataset
+        with open('context.txt', 'r', encoding='utf-8') as file:
+            dataset = file.readlines()
+        
+        for chunk in dataset:
+            try:
+                embedding = ollama.embed(model=EMBEDDING_MODEL, input=chunk)['embeddings'][0]
+                VECTOR_DB.append((chunk, embedding))
+            except Exception as e:
+                st.error(f"Error embedding chunk: {str(e)}")
+                continue
+    except FileNotFoundError:
+        st.error("context.txt file not found. Please ensure it exists in the correct location.")
+        st.stop()
     except Exception as e:
-        st.error(f"Cannot connect to Ollama server at {OLLAMA_HOST}. Please check if the server is running.")
-        return False
+        st.error(f"Error initializing database: {str(e)}")
+        st.stop()
+
 
 def add_chunk_to_database(chunk):
     embedding = ollama.embed(model=EMBEDDING_MODEL, input=chunk)['embeddings'][0]
